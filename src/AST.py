@@ -1,5 +1,5 @@
-from dataclasses import dataclass
 from typing import Union, Tuple, List
+from dataclasses import dataclass
 
 # ----------------- Types ---------------------
 
@@ -15,20 +15,22 @@ class DexType:
 
 
 @dataclass
-class IndexSetType(DexType): 
-    index_set : 'Index_Set' # Value-dependent type
-
-@dataclass
 class ArrayType(DexType):
-    index_set : 'Index_Set' # Value-dependent type
-    elmt_type : DexType
+    # Syntax doesn't restrict tau1 to be an index set but type checking does
+    index_set : 'Index_Set' # tau1, Value-dependent type
+    elmt_type : DexType     # tau2
 
 # Type for a type annotation not filled in
+@dataclass
 class UnspecifiedType(DexType): 
     pass
 
 @dataclass
 class FloatType(DexType): 
+    pass
+
+@dataclass
+class IntType(DexType): 
     pass
 
 @dataclass
@@ -39,6 +41,7 @@ class UnitType(DexType):
 class FunctionType(DexType): 
     tau1: DexType
     tau2: DexType
+    effect : 'Effect'
 
 @dataclass
 class PairType(DexType): 
@@ -63,10 +66,15 @@ class Var:
 class Float: 
     value: float
 
+@dataclass
+class Int: 
+    value: int
 
+
+# Has type Int -> ArrayType
 @dataclass
 class Fin: 
-    end: int
+    end: Int
 
 
 @dataclass
@@ -84,31 +92,32 @@ class Unit:
 class For: 
     var       : Var
     body      : 'Expr'
-    var_type  : IndexSetType = UnspecifiedType() # Put last because its optional in the constructor
+    var_type  : 'Index_Set' = UnspecifiedType() # Put last because its optional in the constructor
 
 
 @dataclass
 class Index: 
-    array: 'Expr'
-    index: 'Expr'
+    array: 'Value'
+    index: 'Value'
 
 
 @dataclass
 class Function: 
-    param     : Var
+    var     : Var
     body      : 'Expr'
     param_type: 'DexType' = UnspecifiedType() 
 
 @dataclass
 class View: 
-    index_set: 'Index_Set'
-    body     : 'Expr'
+    var       : Var
+    body      : 'Expr'
+    var_type  : 'Index_Set' = UnspecifiedType() # Put last because its optional in the constructor
 
 
 @dataclass
 class RefSlice: 
     ref  : Var
-    index: 'Expr'
+    index: 'Value'
 
 @dataclass
 class runAccum: 
@@ -128,27 +137,28 @@ class Let:
     var  : Var
     value: 'Expr'
     body : 'Expr'
+    var_type : 'DexType' = UnspecifiedType()
 
 @dataclass
 class Application: 
     func: Function
-    arg : 'Expr'
+    arg : 'Value'
 
 
 @dataclass
 class Fst: 
-    pair: Pair
+    pair: 'Value'
 
 
 @dataclass
 class Snd: 
-    pair: Pair
+    pair: 'Value'
 
 
 @dataclass
 class Add: 
-    left : 'Expr'
-    right: 'Expr'
+    left : 'Value'
+    right: 'Value'
 
 @dataclass
 class Multiply: 
@@ -164,36 +174,35 @@ class Hole:
 @dataclass
 class LetContext: 
     var     : Var
-    var_type: 'DexType'
+    var_type: DexType
     expr    : 'Expr'
     context : 'Context'
 
 # Effects
-@dataclass
-class Pure: 
+
+class Effect:
     pass
 
 @dataclass
-class StateEffect: 
-    state_type: 'DexType'
-    effect    : 'Effect'
+class Pure(Effect): 
+    pass
+
 
 @dataclass
-class AccumEffect: 
-    accum_type: 'DexType'
-    effect    : 'Effect'
+class AccumEffect(Effect): 
+    accum_type: DexType
+    effect    : Effect
 
 
 # Type aliases
 
-Value   = Union[Var, Pair]
+Value   = Union[Var, Float, Int, Fin, Function, View, Pair]
 Expr    = Union[Value, Let, Application, Index, Fst, Snd, RefSlice, runAccum, Add, Multiply]
 Context = Union[Hole, LetContext]
-Effect  = Union[Pure, StateEffect, AccumEffect]
 
 
 Index_Set         = Union[Unit, Fin, Pair]
-Vector_Space_Type = Union[Float, Pair, IndexSetType]
+Vector_Space_Type = Union[Float, Pair, ArrayType]
 
 
 if __name__ == "__main__": 
@@ -202,8 +211,8 @@ if __name__ == "__main__":
     x       = Var("x")
     i       = Var("i")
     total   = Var("total")
-    program = Let(sum, Function(x, ArrayType(Fin(n), FloatType()),
+    program = Let(sum, Function(x,
                                 Snd(runAccum(Function(total,
-                                For(i, PlusEquals(total, Index(x, i))))))), Unit())
+                                For(i, PlusEquals(total, Index(x, i)))))), ArrayType(Fin(Int(n)), FloatType())), Unit())
     
     print(program)
