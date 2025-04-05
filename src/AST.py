@@ -105,6 +105,7 @@ class Int:
 # Has type Int -> ArrayType
 @dataclass
 class Fin: 
+    # this could be a value?
     end: Int
     def __str__(self):
         return f"Fin({self.end})"
@@ -280,8 +281,8 @@ class AccumEffect(Effect):
 
 # Type aliases
 
-Value   = Union[Var, Float, Int, Fin, Function, View, Pair]
-Expr    = Union[Value, Let, Application, Index, Fst, Snd, RefSlice, runAccum, Add, Multiply]
+Value   = Union[Var, Float, Int, Fin, Function, View, Pair, Unit]
+Expr    = Union[Value, Let, Application, Index, For, Fst, Snd, RefSlice, runAccum, PlusEquals, Add, Multiply]
 Context = Union[Hole, LetContext]
 
 
