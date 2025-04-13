@@ -1,5 +1,6 @@
 from typing import Union, Tuple, List
 from dataclasses import dataclass, field
+from abc import ABC
 
 # ----------------- Helper ------------------
 
@@ -17,8 +18,7 @@ def indent(text, prefix="  "):
 #         But this should semantically be a float. Therefore our type checking and inference system will need 
 #         to conclude this is of type FloatType
 
-
-class DexType: 
+class DexType(ABC): 
     pass
 
 
@@ -183,9 +183,10 @@ class RefSlice:
 class runAccum: 
     # Note that function's parameter must be a reference to a VectorSpace
     update_fun: Function
+    init_val : Float | Int = Int(0)
 
     def __str__(self):
-        return f"runAccum {self.update_fun}"
+        return f"runAccum {self.init_val} {self.update_fun}"
 
 @dataclass
 class PlusEquals: 
@@ -199,7 +200,7 @@ class PlusEquals:
 # Expressions
 @dataclass
 class Let: 
-    var  : Var
+    var  : Var | Pair
     value: 'Expr'
     body : 'Expr'
     var_type : 'DexType' = field(default_factory=UnspecifiedType)

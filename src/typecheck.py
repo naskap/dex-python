@@ -16,6 +16,16 @@ def isValue(e : 'Expr'):
     
     return False
     
+# Assert let asignee is either a var or a tuple where values are appended to the right
+#   Not officially in the syntax but it is used in SRunState and SRunAccum
+def assertLetAsigneeValid(e):
+    if(isinstance(e, Pair)):
+        assertLetAsigneeValid(e.left)
+        assert isinstance(e.right, Var)
+
+    assert isinstance(e, Var)
+
+
 def assertValid(e : 'Expr'):
 
     if isinstance(e, Var):
@@ -62,14 +72,16 @@ def assertValid(e : 'Expr'):
 
     elif isinstance(e, runAccum):
         assertValid(e.update_fun)
+        assert isValue(e.init_val)
+        assertValid(e.init_val)
 
     elif isinstance(e, PlusEquals):
         assert isinstance(e.dest, Var) 
         assertValid(e.src)
 
     elif isinstance(e, Let):
-
-        assert isinstance(e.var, Var) and isinstance(e.var_type, DexType) 
+        assertLetAsigneeValid(e.var)
+        assert isinstance(e.var_type, DexType) 
         assertValid(e.value)
         assertValid(e.body)
 
