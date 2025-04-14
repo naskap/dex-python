@@ -88,6 +88,9 @@ class Var:
     name: str
     def __str__(self):
         return self.name
+    
+    def __hash__(self):
+        return self.name.__hash__()
 
 @dataclass
 class Float: 
@@ -255,7 +258,8 @@ class Multiply:
 # Contexts
 @dataclass
 class Hole: 
-    pass
+    def __str__(self):
+        return "•"
 
 @dataclass
 class LetContext: 
@@ -263,6 +267,10 @@ class LetContext:
     var_type: DexType
     expr    : 'Expr'
     context : 'Context'
+    def __str__(self):
+        if isinstance(self.var_type, UnspecifiedType):
+            return f"let {self.var} = {self.expr} in\n{indent(self.context)}"
+        return f"let {self.var}: {self.var_type} = {self.expr} in\n{indent(self.context)}"
 
 # Effects
 

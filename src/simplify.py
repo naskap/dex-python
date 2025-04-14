@@ -1,5 +1,5 @@
 from AST import *
-from typecheck import isValue
+from typecheck import isValue, assertValid, assertContextValid
 from typeinfer import TypeInfer
 from traversers import ExprMutator, ExprVisitor
 from typing import Iterable
@@ -7,6 +7,7 @@ from typing import Iterable
 var_num = 1
 
 def get_fresh_var():
+    global var_num
     toreturn = Var("fvar{}".format(var_num))
     var_num = var_num + 1
     return toreturn
@@ -49,7 +50,7 @@ def composeContexts(E1 : Context, E2 : Context) -> Context:
     if(isinstance(E1, LetContext)):
         return LetContext(E1.var, E1.var_type, E1.expr, composeContexts(E1.context, E2))
     else:
-        assert isinstance(E1, Hole())
+        assert isinstance(E1, Hole)
         return E2
 
 def binders(E : Context) -> list[tuple[Var, DexType]]:
@@ -58,6 +59,7 @@ def binders(E : Context) -> list[tuple[Var, DexType]]:
     curContext = E
     while(not isinstance(curContext, Hole)):
         toreturn.append((curContext.var, curContext.var_type))
+        curContext = curContext.context
 
     return toreturn
 
@@ -92,7 +94,7 @@ def bindingList(Ed : Context, v : Value, extraBinding : tuple[Var, DexType] = No
 def bindingListR(potentialBindings : list[tuple[Var, DexType]], v : Value) -> set[Var]:
 
     if(len(potentialBindings) == 0):
-        return []
+        return set()
 
     x1, tau1 = potentialBindings.pop()
     ybar = bindingListR(potentialBindings, v)
@@ -107,13 +109,13 @@ def bindingListR(potentialBindings : list[tuple[Var, DexType]], v : Value) -> se
     elif(x1 not in freeVarsV):
         return ybar
 
-    return []
+    return set()
 
 def applyContext(Ed : Context, v : Value) -> Expr:
     if(isinstance(Ed, Hole)):
         return v
     elif(isinstance(Ed, LetContext)):
-        return Let(Ed.var, Ed.var_type, Ed.expr, applyContext(Ed.context, v))
+        return Let(Ed.var, Ed.expr, applyContext(Ed.context, v), Ed.var_type)
     
     assert False, "Invalid context type {}".format(type(Ed))
 
@@ -125,10 +127,10 @@ def createTuple(vars : Iterable[Var]) -> Pair:
         return next(var_iterator) # Note: doesn't follow type annotation
     
     cur_pair = Pair(next(var_iterator), next(var_iterator))
-    to_add = next(var_iterator, default = None)
+    to_add = next(var_iterator, None)
     while(to_add is not None):
         cur_pair = Pair(to_add, cur_pair)
-        to_add = next(var_iterator, default = None)
+        to_add = next(var_iterator, None)
     
     return cur_pair
 
@@ -156,9 +158,9 @@ def simplify(e : 'Expr') -> Tuple[Context, Value]:
         Ed, v = simplify(e.body)
         x1_n = bindingList(Ed, v)
 
-        # TODO Unclear about what free(x1,...,xn) is
-        #          x1, ..., xn should be free variables in v 
-        #            bounded by Ed
+        if(len(x1_n) == 0):
+            return Ed, For(e.var, v, e.var_type)
+
         if(e.var not in x1_n):
             y = get_fresh_var()
             x = e.var
@@ -179,7 +181,35 @@ def simplify(e : 'Expr') -> Tuple[Context, Value]:
                           runAccum(Function(e.update_fun.var, applyContext(Ed, x1_n_tuple), e.update_fun.param_type), e.init_val), Hole()), \
                 Pair(v1, s)
 
-    type_infer = TypeInfer()
-    tau_d = type_infer.infer(e)
-    x = type_infer.fresh_typevar()
-    return LetContext(x, tau_d, e, Hole()), x
+
+    x = get_fresh_var()
+    return LetContext(x, UnspecifiedType(), e, Hole()), x
+
+if __name__ == "__main__":
+
+    p1 = Var("p1")
+    p2 = Var("p2")
+    
+    expr = Let(Var("f1"), Function(p1, Multiply(p1,p1)), \
+        Let(Var("f2"), Function(p2, Add(p2, p2)), \
+            Let(Var("xs"), For(Var("i"), Int(123), Fin(Int(99))),
+    For(Var("i"), 
+        Let(Var("y1"), Application(Var("f1"), Index(Var("xs"),Var("i"))),
+        Let(Var("y2"), Application(Var("f2"), Var("y1")),
+            Function(Var("z"), Add(Add(Var("y1"), Var("y2")), Var("z")))
+            ))))))
+    
+    expr = Let(Var("f1"), Function(p1, Multiply(p1,p1)), \
+        Let(Var("f2"), Function(p2, Add(p2, p2)), \
+            Let(Var("xs"), For(Var("i"), Int(123), Fin(Int(99))),
+    For(Var("i"), 
+        Let(Var("y1"), Application(Var("f1"), Index(Var("xs"),Var("i"))),
+        Let(Var("y2"), Application(Var("f2"), Var("y1")),
+            Function(Var("z"), Add(Add(Var("y1"), Var("y2")), Var("z")))
+            ))))))
+    
+    assertValid(expr)
+    Ed, v = simplify(expr)
+    assertContextValid(Ed)
+    print("Simplification context = \n{}".format(Ed))
+    print("Value = \n{}".format(v))

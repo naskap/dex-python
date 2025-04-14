@@ -26,6 +26,31 @@ def assertLetAsigneeValid(e):
     assert isinstance(e, Var)
 
 
+def assertTypeValid(e : DexType):
+    
+    if isinstance(e, ArrayType):
+        assertValid(e.index_set)
+        assertTypeValid(e.elmt_type)
+    elif isinstance(e, (FunctionType, PairType, RefType)):
+        assertTypeValid(e.tau1)
+        assertTypeValid(e.tau2)
+
+    assert isinstance(e, (UnspecifiedType, FloatType, IntType, UnitType)), "Unkown type {}".format(type(e))
+
+
+def assertContextValid(Ed : Context):
+    if(isinstance(Ed, LetContext)):
+        assert isinstance(Ed.var, Var)
+        assertTypeValid(Ed.var_type)
+        assertContextValid(Ed.context)
+        assertValid(Ed.expr)
+        return
+    
+    assert isinstance(Ed, Hole), "Invalid context type {}".format(type(Ed))
+    
+
+
+
 def assertValid(e : 'Expr'):
 
     if isinstance(e, Var):
@@ -51,7 +76,12 @@ def assertValid(e : 'Expr'):
 
     elif isinstance(e, (For, View)):
         # var must be Var; body must be an Expr; var_type should be a DexType.
-        assert (isinstance(e.var, Var) and isinstance(e.var_type, (Unit, Fin, Pair, UnspecifiedType)))
+        if(isinstance(e.var_type, (Fin, Pair))):
+            assertValid(e.var_type)
+        else: 
+            assert isinstance(e.var_type, (Unit, UnspecifiedType))
+
+        assert isinstance(e.var, Var)
         assertValid(e.body)
 
     elif isinstance(e, Index):
@@ -81,12 +111,12 @@ def assertValid(e : 'Expr'):
 
     elif isinstance(e, Let):
         assertLetAsigneeValid(e.var)
-        assert isinstance(e.var_type, DexType) 
+        assertTypeValid(e.var_type)
         assertValid(e.value)
         assertValid(e.body)
 
     elif isinstance(e, Application):
-        assert isinstance(e.func, Function) 
+        assert isinstance(e.func, Function) or isinstance(e.func, Var)
         assertValid(e.func) 
         assertValid(e.arg) and isValue(e.arg)
 
