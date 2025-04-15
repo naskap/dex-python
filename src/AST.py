@@ -186,7 +186,7 @@ class RefSlice:
 class runAccum: 
     # Note that function's parameter must be a reference to a VectorSpace
     update_fun: Function
-    init_val : Float | Int = Int(0)
+    init_val : Float | Int = field(default_factory=lambda: Int(0))
 
     def __str__(self):
         return f"runAccum {self.init_val} {self.update_fun}"
