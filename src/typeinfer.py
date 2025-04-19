@@ -90,6 +90,9 @@ class TypeInfer:
             self.unify(t1.elmt_type, t2.elmt_type)
         elif isinstance(t1, FloatType) or isinstance(t1, IntType) or isinstance(t1, UnitType):
             pass
+        elif isinstance(t1, FinType):
+           if t1.size != t2.size:
+                raise TypeError(f"Cannot unify different Fin sizes: {t1} vs {t2}")
         else:
             raise TypeError(f"Unhandled unification case: {t1} and {t2}")
         
@@ -106,7 +109,9 @@ class TypeInfer:
             elif isinstance(expr, Int):
                 return IntType()
             elif isinstance(expr, Fin):
-                pass
+                if isinstance(expr.end, Int):
+                    return FinType(expr.end.value)
+                raise TypeError(f"Fin end must be an Int, got {expr.end}")
             elif isinstance(expr, Function):
                 if isinstance(expr.param_type, UnspecifiedType):
                     tv = self.fresh_typevar()
@@ -120,7 +125,11 @@ class TypeInfer:
                         tv = self.apply_subst(tv)
                 return FunctionType(tv, t_body, Pure())
             elif isinstance(expr, View):
-                pass
+                if isinstance(expr.var_type, FinType):
+                    self.env[expr.var.name] = expr.var_type
+                    t_body = self.infer(expr.body)
+                    return ArrayType(expr.var_type, t_body)
+                raise TypeError(f"View variable type must be FinType, got {expr.var_type}")
             elif isinstance(expr, Pair):
                 t1 = self.infer(expr.left)
                 t2 = self.infer(expr.right)
@@ -140,9 +149,23 @@ class TypeInfer:
                 self.unify(tf, FunctionType(ta, tr, Pure()))
                 return tr
             elif isinstance(expr, Index):
-                pass
+                t1 = self.infer(expr.array)
+                t2 = self.infer(expr.index)
+                if isinstance(t1, ArrayType):
+                    self.unify(t2, t1.index_set)
+                    return t1.elmt_type
+                raise TypeError(f"Indexing into non-array type {t1}")
             elif isinstance(expr, For):
-                pass
+                if isinstance(expr.var_type, UnspecifiedType):
+                    ty = self.fresh_typevar()
+                    self.env[expr.var.name] = tv
+                    t_body = self.infer(expr.body)
+                    return ArrayType(ty, t_body)
+                elif isinstance(expr.var_type, FinType):
+                    self.env[expr.var.name] = expr.var_type
+                    t_body = self.infer(expr.body)
+                    return ArrayType(expr.var_type, t_body)
+                raise TypeError(f"For variable type must be FinType, got {expr.var_type}")
             elif isinstance(expr, Fst):
                 tp = self.infer(expr.pair)
                 t1 = self.fresh_typevar()
@@ -216,3 +239,27 @@ if __name__ == "__main__":
     print(f"Function application:\n{app_expr}")
     ty = type_infer.infer(app_expr)
     print(f"Inferred type: {ty}; Substitution: {type_infer.subst}; Environment: {type_infer.env}\n")
+
+    # ------- 5. Fin -----
+    type_infer = TypeInfer()
+    expr = Fin(Int(5))
+    ty = type_infer.infer(expr)
+    print(f"Inferred type: {ty}")
+
+    # ------- 6. View -----
+    type_infer = TypeInfer()
+    view_expr = View(
+        var=Var("i"),
+        var_type=FinType(3),
+        body=Float(0.5)  # or some Expr using i
+    )
+    ty = type_infer.infer(view_expr)
+    print(f"Inferred type: {ty}")
+
+    # ------- 7. Index -----
+    type_infer = TypeInfer()
+    type_infer.env["x"] = ArrayType(FinType(3), FloatType())  # x: Fin(3) => Float
+    type_infer.env["i"] = FinType(3)                          # i: Fin(3)
+    expr = Index(array=Var("x"), index=Var("i"))
+    ty = type_infer.infer(expr)
+    print(f"Type of x.i: {ty}")

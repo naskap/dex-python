@@ -79,6 +79,11 @@ class RefType(DexType):
     def __str__(self):
         return f"Ref({self.tau1}, {self.tau2})"
 
+@dataclass
+class FinType(DexType):
+    size: DexType
+    def __str__(self):
+        return f"Fin({self.size})"
 
 
 # ------------------ Values  ------------------
