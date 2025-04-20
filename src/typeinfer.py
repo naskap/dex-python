@@ -48,7 +48,7 @@ class TypeInfer:
     # recursively apply the substitution of type variables occuring in t
     def apply_subst(self, t: DexType) -> DexType:
         if isinstance(t, TypeVar):
-            return self.apply_subst(self.subst[t]) if t.id in self.subst else t
+            return self.apply_subst(self.subst[t]) if t in self.subst else t
         elif isinstance(t, FunctionType):
             return FunctionType(self.apply_subst(t.tau1), self.apply_subst(t.tau2), t.effect)
         elif isinstance(t, PairType):
@@ -139,15 +139,18 @@ class TypeInfer:
         else:
             if isinstance(expr, Let):
                 t1 = self.infer(expr.value)
-                self.env[expr.var.name] = t1
+                if expr.var.name not in self.env:
+                    raise TypeError(f"Variable {expr.var.name} does not exist in environment")
+                tvar = self.env[expr.var.name]
+                self.unify(tvar, t1)
                 t2 = self.infer(expr.body)
-                return t2
+                return UnitType()
             elif isinstance(expr, Application):
                 tf = self.infer(expr.func)
                 ta = self.infer(expr.arg)
                 tr = self.fresh_typevar()
                 self.unify(tf, FunctionType(ta, tr, Pure()))
-                return tr
+                return self.apply_subst(tr)
             elif isinstance(expr, Index):
                 t1 = self.infer(expr.array)
                 t2 = self.infer(expr.index)
@@ -171,18 +174,24 @@ class TypeInfer:
                 t1 = self.fresh_typevar()
                 t2 = self.fresh_typevar()
                 self.unify(tp, PairType(t1, t2))
-                return t1
+                return self.subst[t1]
             elif isinstance(expr, Snd):
                 tp = self.infer(expr.pair)
                 t1 = self.fresh_typevar()
                 t2 = self.fresh_typevar()
                 self.unify(tp, PairType(t1, t2))
+                return self.subst[t2]
             elif isinstance(expr, RefSlice):
                 pass
             elif isinstance(expr, runAccum):
                 pass
             elif isinstance(expr, PlusEquals):
-                pass
+                t1 = self.infer(expr.src)
+                if expr.dest.name not in self.env:
+                    raise TypeError(f"Variable {expr.dest.name} does not exist in environment")
+                tvar = self.env[expr.dest.name]
+                self.unify(tvar, t1)
+                return UnitType()
             elif isinstance(expr, Add):
                 t1 = self.infer(expr.left)
                 t2 = self.infer(expr.right)
@@ -194,7 +203,9 @@ class TypeInfer:
             else:
                 raise NotImplementedError(f"Inference not implemented for {type(expr)}")
 
-if __name__ == "__main__":
+# Unit Tests
+
+def letAddition():
     type_infer = TypeInfer()
     x = Var("x")
     type_infer.include_var(x)
@@ -203,48 +214,81 @@ if __name__ == "__main__":
         Add(x, Float(1.0)),
         Unit()
     )
-    print(f"Expression:\n{expr}")
+    print(f"Addition:\n{expr}")
     ty = type_infer.infer(expr)
     subst = type_infer.subst
     env = type_infer.env
     print(f"Inferred type: {ty}; Substitution: {subst}; Environment: {env};")
-    
+    assert(ty == UnitType())
     print()
-    # ----- 2. Function with Explicitly Typed Parameter -----
+    
+# ----- 2. Function with Explicitly Typed Parameter -----
+def typedFunction():
     type_infer = TypeInfer()
     x = Var("x")
+    type_infer.include_var(x)
     body = Add(x, Float(2.0))  # x + 2.0
     f = Function(x, body, FloatType())  # fun (x: Float) => x + 2.0
     print(f"Typed function:\n{f}")
     ty = type_infer.infer(f)
     print(f"Inferred type: {ty}; Substitution: {type_infer.subst}; Environment: {type_infer.env}\n")
-
+    assert(ty == FunctionType(FloatType(), FloatType(), Pure()))
     print()
-    # ----- 3. Function with Untyped Parameter -----
+
+# ----- 3. Function with Untyped Parameter -----
+def untypedFunction():
     type_infer = TypeInfer()
     x = Var("x")
+    type_infer.include_var(x)
     body = Add(x, Float(2.0))  # x + 2.0
     f = Function(x, body)  # fun x => x + 2.0
     print(f"Untyped function:\n{f}")
     ty = type_infer.infer(f)
     print(f"Inferred type: {ty}; Substitution: {type_infer.subst}; Environment: {type_infer.env}\n")
-
+    assert(ty == FunctionType(FloatType(), FloatType(), Pure()))
     print()
-    # ----- 4. Function Application -----
+
+# ----- 4. Function Application -----
+def functionApplication():
     type_infer = TypeInfer()
     x = Var("x")
+    type_infer.include_var(x)
     body = Add(x, Float(3.0))
     f = Function(x, body)
     app_expr = Application(f, Float(1.0))  # (fun x => x + 3.0)(1.0)
     print(f"Function application:\n{app_expr}")
     ty = type_infer.infer(app_expr)
     print(f"Inferred type: {ty}; Substitution: {type_infer.subst}; Environment: {type_infer.env}\n")
+    assert(ty == FloatType())
+    print()
+    
+def plusEquals():
+    type_infer = TypeInfer()
+    x = Var("x")
+    type_infer.include_var(x)
+    expr = PlusEquals(x, Float(1.0))  # x += 1.0
+    print(f"PlusEquals:\n{expr}")
+    ty = type_infer.infer(expr)
+    print(f"Inferred type: {ty}; Substitution: {type_infer.subst}; Environment: {type_infer.env};")
+    assert(ty == UnitType())
+    print()
 
+if __name__ == "__main__":
+    # ------- 1. Addition -----
+    letAddition()
+    # ------- 2. Function with Explicitly Typed Parameter -----
+    typedFunction()
+    # ------- 3. Function with Untyped Parameter -----
+    untypedFunction()
+    # ------- 4. Function Application -----
+    functionApplication()
+    
     # ------- 5. Fin -----
     type_infer = TypeInfer()
     expr = Fin(Int(5))
     ty = type_infer.infer(expr)
     print(f"Inferred type: {ty}")
+    print()
 
     # ------- 6. View -----
     type_infer = TypeInfer()
@@ -255,6 +299,7 @@ if __name__ == "__main__":
     )
     ty = type_infer.infer(view_expr)
     print(f"Inferred type: {ty}")
+    print()
 
     # ------- 7. Index -----
     type_infer = TypeInfer()
@@ -263,3 +308,8 @@ if __name__ == "__main__":
     expr = Index(array=Var("x"), index=Var("i"))
     ty = type_infer.infer(expr)
     print(f"Type of x.i: {ty}")
+    print()
+    
+    
+    # ------- 8. PlusEquals -----
+    plusEquals()
