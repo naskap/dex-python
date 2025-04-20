@@ -109,7 +109,7 @@ class TypeInfer:
                 return IntType()
             elif isinstance(expr, FinType):
                 if isinstance(expr.end, Int):
-                    return Fin(expr.end.value)
+                    return FinType(expr.end.value)
                 raise TypeError(f"Fin end must be an Int, got {expr.end}")
             elif isinstance(expr, Function):
                 if isinstance(expr.param_type, UnspecifiedType):
@@ -124,7 +124,7 @@ class TypeInfer:
                         tv = self.apply_subst(tv)
                 return FunctionType(tv, t_body, Pure())
             elif isinstance(expr, View):
-                if isinstance(expr.var_type, Fin):
+                if isinstance(expr.var_type, FinType):
                     self.env[expr.var.name] = expr.var_type
                     t_body = self.infer(expr.body)
                     return ArrayType(expr.var_type, t_body)
@@ -163,7 +163,7 @@ class TypeInfer:
                     self.env[expr.var.name] = tv
                     t_body = self.infer(expr.body)
                     return ArrayType(ty, t_body)
-                elif isinstance(expr.var_type, Fin):
+                elif isinstance(expr.var_type, FinType):
                     self.env[expr.var.name] = expr.var_type
                     t_body = self.infer(expr.body)
                     return ArrayType(expr.var_type, t_body)
@@ -293,7 +293,7 @@ if __name__ == "__main__":
     type_infer = TypeInfer()
     view_expr = View(
         var=Var("i"),
-        var_type=Fin(3),
+        var_type=FinType(3),
         body=Float(0.5)  # or some Expr using i
     )
     ty = type_infer.infer(view_expr)
@@ -310,7 +310,7 @@ if __name__ == "__main__":
     type_infer.include_var(i)
     type_infer.include_var(j)
     type_infer.include_var(r)
-    expr = Let(x, For(i, Float(1.0), Fin(3)), Index(x, index=Var("j"))) # x[j]
+    expr = Let(x, For(i, Float(1.0), FinType(3)), Index(x, index=Var("j"))) # x[j]
     ty = type_infer.infer(expr)
     print(f"Substitution: {type_infer.subst}; Environment: {type_infer.env}\n")
     print(f"Type of x.j: {ty}")
