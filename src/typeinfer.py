@@ -98,11 +98,10 @@ class TypeInfer:
         
 
     def infer(self, expr: Expr) -> DexType:
-        # print(f"Inferring type for {expr}")
         if isinstance(expr, Value):
             if isinstance(expr, Var):
                 if expr.name in self.env:
-                    return self.env[expr.name]
+                    return self.apply_subst(self.env[expr.name])
                 raise TypeError(f"Unbound variable {expr.name}")
             elif isinstance(expr, Float):
                 return FloatType()
@@ -110,7 +109,7 @@ class TypeInfer:
                 return IntType()
             elif isinstance(expr, Fin):
                 if isinstance(expr.end, Int):
-                    return FinType(expr.end.value)
+                    return Fin(expr.end.value)
                 raise TypeError(f"Fin end must be an Int, got {expr.end}")
             elif isinstance(expr, Function):
                 if isinstance(expr.param_type, UnspecifiedType):
@@ -125,7 +124,7 @@ class TypeInfer:
                         tv = self.apply_subst(tv)
                 return FunctionType(tv, t_body, Pure())
             elif isinstance(expr, View):
-                if isinstance(expr.var_type, FinType):
+                if isinstance(expr.var_type, Fin):
                     self.env[expr.var.name] = expr.var_type
                     t_body = self.infer(expr.body)
                     return ArrayType(expr.var_type, t_body)
@@ -144,7 +143,7 @@ class TypeInfer:
                 tvar = self.env[expr.var.name]
                 self.unify(tvar, t1)
                 t2 = self.infer(expr.body)
-                return UnitType()
+                return t2
             elif isinstance(expr, Application):
                 tf = self.infer(expr.func)
                 ta = self.infer(expr.arg)
@@ -155,7 +154,7 @@ class TypeInfer:
                 t1 = self.infer(expr.array)
                 t2 = self.infer(expr.index)
                 if isinstance(t1, ArrayType):
-                    self.unify(t2, t1.index_set)
+                    self.unify(t2, IntType())
                     return t1.elmt_type
                 raise TypeError(f"Indexing into non-array type {t1}")
             elif isinstance(expr, For):
@@ -164,7 +163,7 @@ class TypeInfer:
                     self.env[expr.var.name] = tv
                     t_body = self.infer(expr.body)
                     return ArrayType(ty, t_body)
-                elif isinstance(expr.var_type, FinType):
+                elif isinstance(expr.var_type, Fin):
                     self.env[expr.var.name] = expr.var_type
                     t_body = self.infer(expr.body)
                     return ArrayType(expr.var_type, t_body)
@@ -294,7 +293,7 @@ if __name__ == "__main__":
     type_infer = TypeInfer()
     view_expr = View(
         var=Var("i"),
-        var_type=FinType(3),
+        var_type=Fin(3),
         body=Float(0.5)  # or some Expr using i
     )
     ty = type_infer.infer(view_expr)
@@ -303,11 +302,18 @@ if __name__ == "__main__":
 
     # ------- 7. Index -----
     type_infer = TypeInfer()
-    type_infer.env["x"] = ArrayType(FinType(3), FloatType())  # x: Fin(3) => Float
-    type_infer.env["i"] = FinType(3)                          # i: Fin(3)
-    expr = Index(array=Var("x"), index=Var("i"))
+    x = Var("x")
+    i = Var("i")
+    j = Var("j")
+    r = Var("r")
+    type_infer.include_var(x)
+    type_infer.include_var(i)
+    type_infer.include_var(j)
+    type_infer.include_var(r)
+    expr = Let(x, For(i, Float(1.0), Fin(3)), Index(x, index=Var("j"))) # x[j]
     ty = type_infer.infer(expr)
-    print(f"Type of x.i: {ty}")
+    print(f"Substitution: {type_infer.subst}; Environment: {type_infer.env}\n")
+    print(f"Type of x.j: {ty}")
     print()
     
     
