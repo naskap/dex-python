@@ -2,11 +2,7 @@ from AST import *
 
 # Is a value restricted to the following variables
 def isValue(e : 'Expr'):
-    if(isinstance(e, (Var, Float, Int, Function, View))):
-        return True
-    
-    if(isinstance(e,Fin)):
-        assert isinstance(e.end,Int)
+    if(isinstance(e, (Var, Float, Int, Function, View, DexType))):
         return True
 
     if(isinstance(e, Pair)):
@@ -26,16 +22,27 @@ def assertLetAsigneeValid(e):
     assert isinstance(e, Var)
 
 
+def assertIndexSetValid(e : DexType):
+    if(isinstance(e, PairType)):
+        assertIndexSetValid(e.tau1)
+        assertIndexSetValid(e.tau2)
+    elif(isinstance(e, FinType)):
+        assert isinstance(e.end,Int) or isinstance(e.end, Var)
+    else:
+        assert isinstance(e, UnitType)
+
 def assertTypeValid(e : DexType):
     
     if isinstance(e, ArrayType):
-        assertValid(e.index_set)
+        assertIndexSetValid(e.index_set)
         assertTypeValid(e.elmt_type)
     elif isinstance(e, (FunctionType, PairType, RefType)):
         assertTypeValid(e.tau1)
         assertTypeValid(e.tau2)
-
-    assert isinstance(e, (UnspecifiedType, FloatType, IntType, UnitType)), "Unkown type {}".format(type(e))
+    elif isinstance(e, FinType):
+        assert isinstance(e.end,Int) or isinstance(e.end, Var)
+    else:
+        assert isinstance(e, (UnspecifiedType, FloatType, IntType, UnitType, TypeType, Var)), "Unkown type {}".format(type(e))
 
 
 def assertContextValid(Ed : Context):
@@ -50,20 +57,15 @@ def assertContextValid(Ed : Context):
     
 
 
-
+# Checks whether the types are plausible
+# Doesn't build a type context -- that is left to type inference
 def assertValid(e : 'Expr'):
-
     if isinstance(e, Var):
         assert isinstance(e.name, str)
     elif isinstance(e, Float):
         assert isinstance(e.value, float)
     elif isinstance(e, Int):
         return isinstance(e.value, int)
-    
-    elif isinstance(e, Fin):
-        # Ensure the 'end' field is an Int e and valid.
-        assert isinstance(e.end, Int) 
-        assertValid(e.end)
 
     elif isinstance(e, Pair):
         assert isValue(e.left) and isValue(e.right) 
@@ -76,10 +78,10 @@ def assertValid(e : 'Expr'):
 
     elif isinstance(e, (For, View)):
         # var must be Var; body must be an Expr; var_type should be a DexType.
-        if(isinstance(e.var_type, (Fin, Pair))):
-            assertValid(e.var_type)
+        if(isinstance(e.var_type, (FinType, PairType))):
+            assertTypeValid(e.var_type)
         else: 
-            assert isinstance(e.var_type, (Unit, UnspecifiedType))
+            assert isinstance(e.var_type, (UnitType, UnspecifiedType))
 
         assert isinstance(e.var, Var)
         assertValid(e.body)
@@ -91,9 +93,8 @@ def assertValid(e : 'Expr'):
 
     elif isinstance(e, Function):
         # param must be Var; body is an Expr; param_type is a DexType.
-        assert (isinstance(e.var, Var) and
-                isinstance(e.param_type, DexType))
-    
+        assert isinstance(e.var, Var)
+        assertTypeValid(e.param_type)
         assertValid(e.body)
 
     elif isinstance(e, RefSlice):
@@ -116,12 +117,11 @@ def assertValid(e : 'Expr'):
         assertValid(e.body)
 
     elif isinstance(e, Application):
-        assert isinstance(e.func, Function) or isinstance(e.func, Var)
         assertValid(e.func) 
         assertValid(e.arg) and isValue(e.arg)
 
     elif isinstance(e, (Fst, Snd)):
-        # assert isValue(e.pair) # Being applied to runAccum which is not a value
+        # assert isValue(e.pair) # Commented out because in the examples this is being applied to runAccum which is not a value
         assertValid(e.pair)
 
     elif isinstance(e, Add):
@@ -131,6 +131,8 @@ def assertValid(e : 'Expr'):
     elif isinstance(e, Multiply):
         assertValid(e.left) 
         assertValid(e.right)
+    elif isinstance(e, DexType):
+        assertTypeValid(e)
     else:
         assert False, "{} has unkown type {}".format(e, type(e))
 
@@ -143,7 +145,7 @@ if __name__ == "__main__":
     total   = Var("total")
     program = Let(sum, Function(x,
                                 Snd(runAccum(Function(total,
-                                For(i, PlusEquals(total, Index(x, i)))))), ArrayType(Fin(Int(n)), FloatType())), Unit())
+                                For(i, PlusEquals(total, Index(x, i)))))), ArrayType(FinType(Int(n)), FloatType())), Unit())
     print(program)
     assertValid(program)
 

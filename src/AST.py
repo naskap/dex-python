@@ -25,8 +25,8 @@ class DexType(ABC):
 @dataclass
 class ArrayType(DexType):
     # Syntax doesn't restrict tau1 to be an index set but type checking does
-    index_set : 'Index_Set' # tau1, Value-dependent type
-    elmt_type : DexType     # tau2
+    index_set : 'Index_Set'  # tau1
+    elmt_type : Union[DexType, 'Var'] # tau2
     
     def __str__(self):
         return f"{self.index_set} => {self.elmt_type}"
@@ -49,6 +49,8 @@ class IntType(DexType):
     def __str__(self):
         return "Int"
 
+# Note: Paper doesn't distinguish between unit and unittype, pair and pairtype
+# I think our version is more clear
 
 @dataclass
 class UnitType(DexType): 
@@ -58,8 +60,8 @@ class UnitType(DexType):
 
 @dataclass
 class FunctionType(DexType): 
-    tau1: DexType
-    tau2: DexType
+    tau1: Union[DexType, 'Var']
+    tau2: Union[DexType, 'Var']
     effect : 'Effect'
     def __str__(self):
         return f"{self.tau1} => {self.effect} {self.tau2}"
@@ -67,24 +69,36 @@ class FunctionType(DexType):
 
 @dataclass
 class PairType(DexType): 
-    tau1: DexType
-    tau2: DexType
+    tau1: Union[DexType, 'Var']
+    tau2: Union[DexType, 'Var']
     def __str__(self):
         return f"{self.tau1} x {self.tau2})"
 
 @dataclass
 class RefType(DexType): 
-    tau1: DexType
-    tau2: DexType
+    tau1: Union[DexType, 'Var']
+    tau2: Union[DexType, 'Var']
     def __str__(self):
         return f"Ref({self.tau1}, {self.tau2})"
 
+# In the paper Fin has type Int -> Type
+# Our version modifies this slightly so that it is always applied to something
 @dataclass
-class FinType(DexType):
-    size: DexType
+class FinType(DexType): 
+    end: Union['Int', 'Var']
     def __str__(self):
-        return f"Fin({self.size})"
+        return f"Fin({self.end})"
 
+
+# Needed for polymorphic functions
+# For example the polymorphic identity function is: \t:Type.\x:t.x
+# In class we had special functions that took a type as a parameter: Omega t.\x:t.x
+#       and these would have a universally quantified type: forall t. t->t
+# Dex treats polymorphic functions as regular functions
+@dataclass
+class TypeType(DexType):
+    def __str__(self):
+        return f"Type"
 
 # ------------------ Values  ------------------
 
@@ -108,15 +122,6 @@ class Int:
     value: int
     def __str__(self):
         return str(self.value)
-
-
-# Has type Int -> ArrayType
-@dataclass
-class Fin: 
-    # this could be a value?
-    end: Int
-    def __str__(self):
-        return f"Fin({self.end})"
 
 
 @dataclass
@@ -293,14 +298,12 @@ class AccumEffect(Effect):
     effect    : Effect
 
 
-# Type aliases
-
-Value   = Union[Var, Float, Int, Fin, Function, View, Pair, Unit]
+Value   = Union[Var, Float, Int, Function, View, Pair, Unit, DexType]
 Expr    = Union[Value, Let, Application, Index, For, Fst, Snd, RefSlice, runAccum, PlusEquals, Add, Multiply]
 Context = Union[Hole, LetContext]
 
 
-Index_Set         = Union[Unit, Fin, Pair]
+Index_Set         = Union[UnitType, FinType, PairType]
 Vector_Space_Type = Union[Float, Pair, ArrayType]
 
 
@@ -312,6 +315,6 @@ if __name__ == "__main__":
     total   = Var("total")
     program = Let(sum, Function(x,
                                 Snd(runAccum(Function(total,
-                                For(i, PlusEquals(total, Index(x, i)))))), ArrayType(Fin(Int(n)), FloatType())), Unit())
+                                For(i, PlusEquals(total, Index(x, i)))))), ArrayType(FinType(Int(n)), FloatType())), Unit())
     
     print(program)

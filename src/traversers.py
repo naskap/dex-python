@@ -10,8 +10,6 @@ class ExprMutator:
             return self.mutate_application(e)
         elif isinstance(e, Function):
             return self.mutate_function(e)
-        elif isinstance(e, Fin):
-            return self.mutate_fin(e)
         elif isinstance(e, View):
             return self.mutate_view(e)
         elif isinstance(e, Pair):
@@ -56,6 +54,10 @@ class ExprMutator:
             return self.mutate_pairtype(e)
         elif isinstance(e, RefType):
             return self.mutate_reftype(e)
+        elif isinstance(e, FinType):
+            return self.mutate_fintype(e)
+        elif isinstance(e, TypeType):
+            return self.mutate_typetype(e)
         
         assert False, "Expression type {} not handled".format(type(e))
 
@@ -69,8 +71,8 @@ class ExprMutator:
     def mutate_function(self, e: Function) -> Function:
         return Function(e.var, self.mutate(e.body), self.mutate(e.param_type))
     
-    def mutate_fin(self, e: Fin) -> Fin:
-        return Fin(self.mutate(e.end))
+    def mutate_fintype(self, e: FinType) -> FinType:
+        return FinType(self.mutate(e.end))
     
     def mutate_view(self, e: View) -> View:
         return View(self.mutate(e.var), self.mutate(e.body), self.mutate(e.var_type))
@@ -137,6 +139,9 @@ class ExprMutator:
     
     def mutate_reftype(self, e: RefType) -> RefType:
         return RefType(self.mutate(e.tau1), self.mutate(e.tau2))
+    
+    def mutate_typetype(self, e: TypeType) -> RefType:
+        return e
 
 class ExprVisitor:
     """Base class for expression visitors that can traverse the AST without transforming it"""
@@ -148,8 +153,6 @@ class ExprVisitor:
             self.visit_application(e)
         elif isinstance(e, Function):
             self.visit_function(e)
-        elif isinstance(e, Fin):
-            self.visit_fin(e)
         elif isinstance(e, View):
             self.visit_view(e)
         elif isinstance(e, Pair):
@@ -194,6 +197,10 @@ class ExprVisitor:
             self.visit_pairtype(e)
         elif isinstance(e, RefType):
             self.visit_reftype(e)
+        elif isinstance(e, FinType):
+            self.visit_fintype(e)
+        elif isinstance(e, TypeType):
+            self.visit_typetype(e)
         else:
             assert False, f"Expression type {type(e)} not handled"
 
@@ -209,7 +216,7 @@ class ExprVisitor:
         self.visit(e.body)
         self.visit(e.param_type)
     
-    def visit_fin(self, e: Fin) -> None:
+    def visit_fintype(self, e: FinType) -> None:
         self.visit(e.end)
     
     def visit_view(self, e: View) -> None:
@@ -283,6 +290,9 @@ class ExprVisitor:
         pass
     
     def visit_unittype(self, e: UnitType) -> None:
+        pass
+
+    def visit_typetype(self, e: TypeType) -> None:
         pass
     
     def visit_pairtype(self, e: PairType) -> None:

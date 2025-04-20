@@ -91,7 +91,7 @@ class TypeInfer:
         elif isinstance(t1, FloatType) or isinstance(t1, IntType) or isinstance(t1, UnitType):
             pass
         elif isinstance(t1, FinType):
-           if t1.size != t2.size:
+           if t1.end != t2.end:
                 raise TypeError(f"Cannot unify different Fin sizes: {t1} vs {t2}")
         else:
             raise TypeError(f"Unhandled unification case: {t1} and {t2}")
@@ -108,7 +108,7 @@ class TypeInfer:
                 return FloatType()
             elif isinstance(expr, Int):
                 return IntType()
-            elif isinstance(expr, Fin):
+            elif isinstance(expr, FinType):
                 if isinstance(expr.end, Int):
                     return FinType(expr.end.value)
                 raise TypeError(f"Fin end must be an Int, got {expr.end}")
@@ -242,7 +242,7 @@ if __name__ == "__main__":
 
     # ------- 5. Fin -----
     type_infer = TypeInfer()
-    expr = Fin(Int(5))
+    expr = FinType(Int(5))
     ty = type_infer.infer(expr)
     print(f"Inferred type: {ty}")
 
