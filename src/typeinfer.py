@@ -43,6 +43,18 @@ class TypeInfer:
             return self.occurs_check(tv, t.elmt_type)
         # FloatType, IntType, UnitType do not contain type variables
         return False
+    
+    def is_vector_space(self, t: DexType) -> bool:
+        if isinstance(t, FloatType):
+            return True
+        elif isinstance(t, ArrayType):
+            return self.is_vector_space(t.elmt_type)
+        elif isinstance(t, RefType):
+            return self.is_vector_space(t.tau1) and self.is_vector_space(t.tau2)
+        elif isinstance(t, PairType):
+            return self.is_vector_space(t.tau1) and self.is_vector_space(t.tau2)
+        else:
+            return False
 
     # Given a substitution from type variables to concrete type,
     # recursively apply the substitution of type variables occuring in t
@@ -64,8 +76,6 @@ class TypeInfer:
     def unify(self, t1: DexType, t2: DexType):
         t1 = self.apply_subst(t1)
         t2 = self.apply_subst(t2)
-        
-        # print(f"Unifying {t1} with {t2}")
 
         if isinstance(t1, TypeVar):
             if t1 != t2:
@@ -154,19 +164,22 @@ class TypeInfer:
                 t1 = self.infer(expr.array)
                 t2 = self.infer(expr.index)
                 if isinstance(t1, ArrayType):
-                    self.unify(t2, IntType())
+                    self.unify(t2, t1.index_set)
                     return t1.elmt_type
                 raise TypeError(f"Indexing into non-array type {t1}")
             elif isinstance(expr, For):
-                if isinstance(expr.var_type, UnspecifiedType):
-                    ty = self.fresh_typevar()
-                    self.env[expr.var.name] = tv
-                    t_body = self.infer(expr.body)
-                    return ArrayType(ty, t_body)
-                elif isinstance(expr.var_type, FinType):
+                if isinstance(expr.var_type, FinType):
+                    # do not handle non int argument
                     self.env[expr.var.name] = expr.var_type
                     t_body = self.infer(expr.body)
                     return ArrayType(expr.var_type, t_body)
+                elif isinstance(expr.var_type, UnspecifiedType):
+                    ty = self.fresh_typevar()
+                    self.env[expr.var.name] = ty
+                    t_body = self.infer(expr.body)
+                    if ty in self.subst:
+                        ty = self.apply_subst(ty)
+                    return ArrayType(ty, t_body)
                 raise TypeError(f"For variable type must be FinType, got {expr.var_type}")
             elif isinstance(expr, Fst):
                 tp = self.infer(expr.pair)
@@ -183,7 +196,9 @@ class TypeInfer:
             elif isinstance(expr, RefSlice):
                 pass
             elif isinstance(expr, runAccum):
-                pass
+                tf = self.infer(expr.update_fun)
+                assert isinstance(tf, FunctionType)
+                return PairType(tf.tau2, tf.tau1)
             elif isinstance(expr, PlusEquals):
                 t1 = self.infer(expr.src)
                 if expr.dest.name not in self.env:
@@ -261,6 +276,7 @@ def functionApplication():
     assert(ty == FloatType())
     print()
     
+# ----- 5. PlusEquals -----
 def plusEquals():
     type_infer = TypeInfer()
     x = Var("x")
@@ -272,24 +288,16 @@ def plusEquals():
     assert(ty == UnitType())
     print()
 
-if __name__ == "__main__":
-    # ------- 1. Addition -----
-    letAddition()
-    # ------- 2. Function with Explicitly Typed Parameter -----
-    typedFunction()
-    # ------- 3. Function with Untyped Parameter -----
-    untypedFunction()
-    # ------- 4. Function Application -----
-    functionApplication()
-    
-    # ------- 5. Fin -----
+# ----- 6. Fin -----
+def testFin():
     type_infer = TypeInfer()
     expr = FinType(Int(5))
     ty = type_infer.infer(expr)
     print(f"Inferred type: {ty}")
     print()
 
-    # ------- 6. View -----
+# ----- 7. View -----
+def testView():
     type_infer = TypeInfer()
     view_expr = View(
         var=Var("i"),
@@ -300,7 +308,8 @@ if __name__ == "__main__":
     print(f"Inferred type: {ty}")
     print()
 
-    # ------- 7. Index -----
+# ----- 8. Index -----
+def IndexFunction():
     type_infer = TypeInfer()
     x = Var("x")
     i = Var("i")
@@ -315,7 +324,94 @@ if __name__ == "__main__":
     print(f"Substitution: {type_infer.subst}; Environment: {type_infer.env}\n")
     print(f"Type of x.j: {ty}")
     print()
-    
-    
+
+# ----- 9. runAccumSum -----
+def runAccumSum():
+    type_infer = TypeInfer()
+    n = 10
+    x = Var("x")
+    i = Var("i")
+    total = Var("total")
+    fin_ty = FinType(Int(n))
+    array_ty = ArrayType(fin_ty, FloatType())
+
+    body = For(i, PlusEquals(total, Index(x, i)))
+    update_fun = Function(total, body)
+    program = Snd(runAccum(update_fun))
+    expr = Function(x, program, array_ty)
+    ty = type_infer.infer(expr)
+    print("Sum using runAccum:", expr)
+    print("Result:", ty)
+    print()
+
+# ----- 10. Nested For (Line 22) -----
+def nestedFor():
+    type_infer = TypeInfer()
+    i = Var("i")
+    j = Var("j")
+    height = FinType(Int(3))
+    width = FinType(Int(8))
+
+    expr = For(i, For(j, Float(1.0), height), width)
+    ty = type_infer.infer(expr)
+    print("Nested for:", expr)
+    print("Result:", ty)
+    print()
+
+# ----- 11. Two index x[i,j] (Line 63) -----
+def twoIndex():
+    type_infer = TypeInfer()
+    x = Var("x")
+    i = Var("i")
+    j = Var("j")
+    k = Var("k")
+    l = Var("l")
+    type_infer.include_var(x)
+    height = FinType(Int(3))
+    width = FinType(Int(8))
+
+    expr = Let(x, For(i, For(j, Float(1.0), width), height), For(k, For(l, Index(Index(x, k), l))))
+    ty = type_infer.infer(expr)
+    print("Two index:", expr)
+    print("Result:", ty)
+    print()
+
+# ----- 12. Transpose -----
+def transpose():    
+    type_infer = TypeInfer()
+    x = Var("x")
+    i = Var("i")
+    j = Var("j")
+    k = Var("k")
+    l = Var("l")
+    type_infer.include_var(x)
+    height = FinType(Int(3))
+    width = FinType(Int(8))
+
+    expr = Let(x, For(i, For(j, Float(1.0), width), height), For(k, For(l, Index(Index(x, l), k))))
+    ty = type_infer.infer(expr)
+    print("Transpose:", expr)
+    print("Result:", ty)
+    print()
+
+if __name__ == "__main__":
+    # ------- 1. Addition -----
+    letAddition()
+    # ------- 2. Function with Explicitly Typed Parameter -----
+    typedFunction()
+    # ------- 3. Function with Untyped Parameter -----
+    untypedFunction()
+    # ------- 4. Function Application -----
+    functionApplication()
+    # ------- 7. Index -----
+    IndexFunction()
     # ------- 8. PlusEquals -----
     plusEquals()
+    # ------- 9. runAccum -----
+    runAccumSum()
+    # ------- 10. Nested For (Line 22) -----
+    nestedFor()
+    # ----- 11. Two index x[i,j] (Line 63) -----
+    twoIndex()
+    # ------- 12. Transpose -----
+    transpose()

@@ -30,6 +30,9 @@ class ArrayType(DexType):
     
     def __str__(self):
         return f"{self.index_set} => {self.elmt_type}"
+    
+    def __repr__(self):
+        return f"{self.index_set} => {self.elmt_type}"
 
 # Type for a type annotation not filled in
 @dataclass
@@ -72,7 +75,7 @@ class PairType(DexType):
     tau1: Union[DexType, 'Var']
     tau2: Union[DexType, 'Var']
     def __str__(self):
-        return f"{self.tau1} x {self.tau2})"
+        return f"({self.tau1} x {self.tau2})"
 
 @dataclass
 class RefType(DexType): 
