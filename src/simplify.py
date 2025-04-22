@@ -3,7 +3,7 @@ from typecheck import isValue, assertValid, assertContextValid
 from typeinfer import TypeInfer
 from traversers import ExprMutator, ExprVisitor
 from typing import Iterable
-import unittest
+import pytest
 
 var_num = 1
 
@@ -228,10 +228,7 @@ def simplify(e : 'Expr') -> Tuple[Context, Value]:
 
 
 
-
-
-if __name__ == "__main__":
-
+def test_let_for_function():
     p1 = Var("p1")
     p2 = Var("p2")
     
@@ -244,42 +241,54 @@ if __name__ == "__main__":
             Function(Var("z"), Add(Add(Var("y1"), Var("y2")), Var("z")))
             ))))))
     
+    print("\nInput To Simplification: \n{}\n".format(expr))
     assertValid(expr)
     Ed, v = simplify(expr)
     assertContextValid(Ed)
+    print("\nTest Basic Let/For/Function:")
     print("Simplification context = \n{}".format(Ed))
     print("Value = \n{}".format(v))
 
-
-
+def test_polymorphic_identity():
     polymorphic_identity = Function(Var("type"), Function(Var("x"), Var("x"), Var("type")), TypeType())
-    Ed, v = simplify(Application(polymorphic_identity, IntType()))
+    expr = Application(polymorphic_identity, IntType())
+    print("\nInput To Simplification: \n{}\n".format(expr))
+    assertValid(expr) # Type checking polymorphic functions might need adjustments
+    Ed, v = simplify(expr)
+    assertContextValid(Ed) # Context might be Hole()
+    print("\nTest Polymorphic Identity:")
     print("Simplification context = \n{}".format(Ed))
     print("Value = \n{}".format(v))
 
+def test_polymorphic_identity_applied_in_for():
+    polymorphic_identity = Function(Var("type"), Function(Var("x"), Var("x"), Var("type")), TypeType())
     poly_identity_applied = Let(Var("y1"), Application(Application(polymorphic_identity, IntType()), Int(55)), 
                                 Let(Var("y2"), Application(Application(polymorphic_identity, FloatType()), Float(55.)), Pair(Var("y2"), Var("y1"))))
     wrapped_in_for = For(Var("i"), poly_identity_applied, FinType(Int(100)))
+    print("\nInput To Simplification: \n{}\n".format(wrapped_in_for))
     assertValid(wrapped_in_for)
     Ed, v = simplify(wrapped_in_for)
-    import pdb; pdb.set_trace()
     assertContextValid(Ed)
+    print("\nTest Polymorphic Identity Applied in For:")
     print("Simplification context = \n{}".format(Ed))
     print("Value = \n{}".format(v))
 
-
+def test_higher_order_function_in_for():
     higher_order = Function(Var("f"), Function(Var("x"), Application(Var("f"), Var("x"))))
     expr = Let(Var("xs"), For(Var("i"), Var("i"), FinType(Int(100))), 
-           Let(Var("f1"), Function(Var("x"), Add(Var("x"), Var("x"))),
-           Let(Var("f2"), Function(Var("x"), Multiply(Var("x"), Var("x"))),
-           Let(Var("ho"), higher_order,
-               For(Var("i"), 
-                   Add(Application(Application(Var("ho"), Var("f1")), Index(Var("xs"), Var("i"))), 
+            Let(Var("f1"), Function(Var("x"), Add(Var("x"), Var("x"))),
+            Let(Var("f2"), Function(Var("x"), Multiply(Var("x"), Var("x"))),
+            Let(Var("ho"), higher_order,
+                For(Var("i"), 
+                    Add(Application(Application(Var("ho"), Var("f1")), Index(Var("xs"), Var("i"))), 
                         Application(Application(Var("ho"), Var("f2")), Index(Var("xs"), Var("i"))))
-                   )))))
+                    )))))
     
+    print("\nInput To Simplification: \n{}\n".format(expr))
     assertValid(expr)
     Ed, v = simplify(expr)
     assertContextValid(Ed)
-    print("Simplification context = \n{}".format(Ed))
-    print("Value = \n{}".format(v))
+    print("Simplification context = \n{}\n".format(Ed))
+    print("Value = \n{}\n".format(v))
+
+
