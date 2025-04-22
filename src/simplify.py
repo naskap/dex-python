@@ -3,6 +3,7 @@ from typecheck import isValue, assertValid, assertContextValid
 from typeinfer import TypeInfer
 from traversers import ExprMutator, ExprVisitor
 from typing import Iterable
+import unittest
 
 var_num = 1
 
@@ -119,8 +120,17 @@ def applyContext(Ed : Context, v : Value) -> Expr:
     
     assert False, "Invalid context type {}".format(type(Ed))
 
+def applyContextSubst(Ed : Context, v : Value) -> Expr:
+    context_applied = applyContext(Ed, v)
+    if(isinstance(context_applied, Let)):
+        return subst(context_applied.body, context_applied.var, context_applied.value)
+
+    return context_applied
+
+
 def createTuple(vars : Iterable[Var]) -> Pair:
-    assert len(vars) > 0, "Not handled"
+    if len(vars) == 0:
+        return Unit()
 
     var_iterator = iter(vars)
     if(len(vars) == 1):
@@ -142,7 +152,7 @@ def isSimplifiableExpr(e : 'Expr'):
         return (isinstance(e.func,Function) and isValue(e.arg) ) \
                 or isSimplifiableExpr(e.func) or isSimplifiableExpr(e.arg)
     elif(isinstance(e, Index) and isinstance(e.array, View)):
-        return isSimplifiableExpr(e.index)
+        return isValue(e.index)
     elif(isinstance(e, (Let, Fst, Snd))):
         return True
     
@@ -152,18 +162,18 @@ def isSimplifiableExpr(e : 'Expr'):
 def simplify(e : 'Expr') -> Tuple[Context, Value]:
     if(isValue(e)):
         return Hole(), e
-    
+        
     # Note these two rules are not in the paper but
     #  there is not full function inlining and monomorphization without them
-    elif(isinstance(e, Application) and isSimplifiableExpr(e.func)):
-        Ed1, v1 = simplify(e.func)
-        return simplify(Application(applyContext(Ed1, v1), e.arg))
-    elif(isinstance(e, Application) and isSimplifiableExpr(e.arg)):
-        Ed2, v2 = simplify(e.arg)
-        return simplify(Application(e.func, applyContext(Ed2, v2)))
     elif(isinstance(e, Application) and isinstance(e.func, Function) and isValue(e.arg)):
         subst_result = subst(e.func.body, e.func.var, e.arg)
         return simplify(subst_result)
+    elif(isinstance(e, Application) and isSimplifiableExpr(e.func)):
+        Ed1, v1 = simplify(e.func)
+        return simplify(Application(applyContextSubst(Ed1, v1), e.arg))
+    elif(isinstance(e, Application) and isSimplifiableExpr(e.arg)):
+        Ed2, v2 = simplify(e.arg)
+        return simplify(Application(e.func, applyContextSubst(Ed2, v2)))
     elif(isinstance(e, Let)):
         E1d, v1 = simplify(e.value)
         E2d, v2 = simplify(subst(e.body, e.var, v1))
@@ -175,13 +185,23 @@ def simplify(e : 'Expr') -> Tuple[Context, Value]:
         return simplify(e.pair.left)
     elif(isinstance(e, Snd)):
         return simplify(e.pair.right)
-    
+    elif(isinstance(e, Add) and isSimplifiableExpr(e.left)):
+        E1d, v1 = simplify(e.left)
+        return simplify(Add(applyContextSubst(E1d, v1), e.right)) 
+    elif(isinstance(e, Add) and isSimplifiableExpr(e.right)):
+        E2d, v2 = simplify(e.right)
+        return simplify(Add(e.left, applyContextSubst(E2d, v2)))
+    elif(isinstance(e, Multiply) and isSimplifiableExpr(e.left)):
+        E1d, v1 = simplify(e.left)
+        return simplify(Multiply(applyContextSubst(E1d, v1), e.right)) 
+    elif(isinstance(e, Multiply) and isSimplifiableExpr(e.right)):
+        E2d, v2 = simplify(e.right)
+        return simplify(Multiply(e.left, applyContextSubst(E2d, v2)))
+
+
     if(isinstance(e, For)):
         Ed, v = simplify(e.body)
         x1_n = bindingList(Ed, v)
-
-        if(len(x1_n) == 0):
-            return Ed, For(e.var, v, e.var_type)
 
         if(e.var not in x1_n):
             y = get_fresh_var()
@@ -206,7 +226,8 @@ def simplify(e : 'Expr') -> Tuple[Context, Value]:
     x = get_fresh_var()
     return LetContext(x, UnspecifiedType(), e, Hole()), x
 
-# def assertValidPostSimplificationIR
+
+
 
 
 if __name__ == "__main__":
@@ -237,10 +258,28 @@ if __name__ == "__main__":
     print("Value = \n{}".format(v))
 
     poly_identity_applied = Let(Var("y1"), Application(Application(polymorphic_identity, IntType()), Int(55)), 
-                                Let(Var("y2"), Application(Application(polymorphic_identity, FloatType()), Float(55.)), Var("y2")))
+                                Let(Var("y2"), Application(Application(polymorphic_identity, FloatType()), Float(55.)), Pair(Var("y2"), Var("y1"))))
+    wrapped_in_for = For(Var("i"), poly_identity_applied, FinType(Int(100)))
+    assertValid(wrapped_in_for)
+    Ed, v = simplify(wrapped_in_for)
+    import pdb; pdb.set_trace()
+    assertContextValid(Ed)
+    print("Simplification context = \n{}".format(Ed))
+    print("Value = \n{}".format(v))
+
+
+    higher_order = Function(Var("f"), Function(Var("x"), Application(Var("f"), Var("x"))))
+    expr = Let(Var("xs"), For(Var("i"), Var("i"), FinType(Int(100))), 
+           Let(Var("f1"), Function(Var("x"), Add(Var("x"), Var("x"))),
+           Let(Var("f2"), Function(Var("x"), Multiply(Var("x"), Var("x"))),
+           Let(Var("ho"), higher_order,
+               For(Var("i"), 
+                   Add(Application(Application(Var("ho"), Var("f1")), Index(Var("xs"), Var("i"))), 
+                        Application(Application(Var("ho"), Var("f2")), Index(Var("xs"), Var("i"))))
+                   )))))
     
-    assertValid(poly_identity_applied)
-    Ed, v = simplify(poly_identity_applied)
+    assertValid(expr)
+    Ed, v = simplify(expr)
     assertContextValid(Ed)
     print("Simplification context = \n{}".format(Ed))
     print("Value = \n{}".format(v))
