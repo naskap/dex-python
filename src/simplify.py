@@ -253,10 +253,9 @@ def test_polymorphic_identity():
     polymorphic_identity = Function(Var("type"), Function(Var("x"), Var("x"), Var("type")), TypeType())
     expr = Application(polymorphic_identity, IntType())
     print("\nInput To Simplification: \n{}\n".format(expr))
-    assertValid(expr) # Type checking polymorphic functions might need adjustments
+    assertValid(expr) 
     Ed, v = simplify(expr)
-    assertContextValid(Ed) # Context might be Hole()
-    print("\nTest Polymorphic Identity:")
+    assertContextValid(Ed) 
     print("Simplification context = \n{}".format(Ed))
     print("Value = \n{}".format(v))
 
@@ -268,8 +267,8 @@ def test_polymorphic_identity_applied_in_for():
     print("\nInput To Simplification: \n{}\n".format(wrapped_in_for))
     assertValid(wrapped_in_for)
     Ed, v = simplify(wrapped_in_for)
+    import pdb; pdb.set_trace()
     assertContextValid(Ed)
-    print("\nTest Polymorphic Identity Applied in For:")
     print("Simplification context = \n{}".format(Ed))
     print("Value = \n{}".format(v))
 

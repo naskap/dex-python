@@ -140,7 +140,7 @@ class Pair:
 class Unit: 
     
     def __str__(self):
-        return ""
+        return "()"
 
 
 @dataclass
