@@ -267,7 +267,6 @@ def test_polymorphic_identity_applied_in_for():
     print("\nInput To Simplification: \n{}\n".format(wrapped_in_for))
     assertValid(wrapped_in_for)
     Ed, v = simplify(wrapped_in_for)
-    import pdb; pdb.set_trace()
     assertContextValid(Ed)
     print("Simplification context = \n{}".format(Ed))
     print("Value = \n{}".format(v))
