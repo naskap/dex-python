@@ -19,7 +19,7 @@ def assertLetAsigneeValid(e):
         assertLetAsigneeValid(e.left)
         assert isinstance(e.right, Var)
 
-    assert isinstance(e, Var)
+    assert isinstance(e, (Var,Unit))
 
 
 def assertIndexSetValid(e : DexType):
