@@ -1,5 +1,5 @@
 from AST import *
-from typecheck import isValue, assertValid, assertContextValid
+from assertvalid import isValue, assertValid, assertContextValid
 from typeinfer import TypeInfer
 from traversers import ExprMutator, ExprVisitor
 from typing import Iterable
